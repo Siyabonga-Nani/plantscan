@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlantScan AI</title>
+
+    <style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial,sans-serif;
+}
+
+body{
+    background:#f4fff4;
+}
+
+.container{
+    max-width:700px;
+    margin:auto;
+    padding:20px;
+}
+
+.card{
+    background:white;
+    padding:20px;
+    border-radius:20px;
+    box-shadow:0 5px 20px rgba(0,0,0,0.08);
+    margin-bottom:20px;
+}
+
+button{
+    width:100%;
+    padding:15px;
+    margin-top:10px;
+    border:none;
+    border-radius:12px;
+    background:#2E7D32;
+    color:white;
+    cursor:pointer;
+}
+
+input, textarea{
+    width:100%;
+    padding:15px;
+    margin-top:10px;
+    border:1px solid #ccc;
+    border-radius:12px;
+}
+
+video, img{
+    width:100%;
+    border-radius:15px;
+    margin-top:15px;
+}
+
+.hidden{
+    display:none;
+}
+
+.loader{
+    width:60px;
+    height:60px;
+    border:6px solid #ddd;
+    border-top:6px solid #2E7D32;
+    border-radius:50%;
+    animation:spin 1s linear infinite;
+    margin:auto;
+}
+
+@keyframes spin{
+    100%{transform:rotate(360deg);}
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="card">
+        <h2>PlantScan AI</h2>
+
+        <button onclick="openCamera()">Open Camera</button>
+
+        <input type="file" id="imageUpload" accept="image/*">
+
+        <input type="text" id="plantNameInput" placeholder="Plant name (optional)">
+
+        <textarea id="plantProblemInput" placeholder="Describe plant issue..."></textarea>
+
+        <button onclick="submitPlant()">Analyze Plant</button>
+    </div>
+
+    <div id="cameraSection" class="card hidden">
+        <video id="video" autoplay></video>
+        <button onclick="capturePhoto()">Capture</button>
+    </div>
+
+    <div id="previewSection" class="card hidden">
+        <img id="previewImage">
+    </div>
+
+    <div id="loadingSection" class="card hidden">
+        <div class="loader"></div>
+    </div>
+
+    <div id="resultSection" class="card hidden">
+        <h2>Results</h2>
+
+        <p><strong>Name:</strong> <span id="resultPlantName"></span></p>
+        <p><strong>Scientific:</strong> <span id="resultScientificName"></span></p>
+
+        <h3>Benefits</h3>
+        <ul id="benefitsList"></ul>
+
+        <h3>Negatives</h3>
+        <ul id="negativesList"></ul>
+
+        <h3>Uses</h3>
+        <ul id="usesList"></ul>
+
+        <h3>AI Advice</h3>
+        <p id="aiAdvice"></p>
+    </div>
+
+</div>
+
+<script>
+let video = document.getElementById("video");
+let previewImage = document.getElementById("previewImage");
+let capturedBlob = null;
+
+function openCamera() {
+    document.getElementById("cameraSection").classList.remove("hidden");
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+    .then(stream => {
+        video.srcObject = stream;
+    });
+}
+
+function capturePhoto() {
+    let canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    let ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0);
+
+    canvas.toBlob(blob => {
+        capturedBlob = blob;
+    }, "image/jpeg");
+
+    previewImage.src = canvas.toDataURL("image/jpeg");
+    document.getElementById("previewSection").classList.remove("hidden");
+}
+
+document.getElementById("imageUpload").addEventListener("change", function(e){
+    const file = e.target.files[0];
+
+    if(file){
+        capturedBlob = file;
+
+        const reader = new FileReader();
+        reader.onload = function(event){
+            previewImage.src = event.target.result;
+            document.getElementById("previewSection").classList.remove("hidden");
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+async function submitPlant() {
+    const plantName = document.getElementById("plantNameInput").value;
+    const plantProblem = document.getElementById("plantProblemInput").value;
+
+    document.getElementById("loadingSection").classList.remove("hidden");
+
+    const formData = new FormData();
+
+    if(capturedBlob){
+        formData.append("image", capturedBlob);
+    }
+
+    formData.append("plantName", plantName);
+    formData.append("plantProblem", plantProblem);
+
+    const response = await fetch("http://localhost:5000/analyze", {
+        method: "POST",
+        body: formData
+    });
+
+    const data = await response.json();
+
+    document.getElementById("loadingSection").classList.add("hidden");
+    document.getElementById("resultSection").classList.remove("hidden");
+
+    document.getElementById("resultPlantName").innerText = data.plantName;
+    document.getElementById("resultScientificName").innerText = data.scientificName;
+
+    document.getElementById("benefitsList").innerHTML =
+        data.benefits.map(item => `<li>${item}</li>`).join("");
+
+    document.getElementById("negativesList").innerHTML =
+        data.negatives.map(item => `<li>${item}</li>`).join("");
+
+    document.getElementById("usesList").innerHTML =
+        data.uses.map(item => `<li>${item}</li>`).join("");
+
+    document.getElementById("aiAdvice").innerText = data.aiAdvice;
+}
+</script>
+
+</body>
+</html>
